@@ -12,6 +12,15 @@ contract FlightSuretyData {
     address private contractOwner; // Account used to deploy contract
     bool private operational = true; // Blocks all state changes throughout the contract if false
 
+    mapping(address => bool) private authorizedCaller;
+    mapping(bytes32 => Flight) private flights;
+
+    struct Flight {
+        bool isRegistered;
+        uint8 statusCode;
+        uint256 updatedTimestamp;
+        address airline;
+    }
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
@@ -20,8 +29,9 @@ contract FlightSuretyData {
      * @dev Constructor
      *      The deploying account becomes contractOwner
      */
-    constructor() public {
+    constructor() {
         contractOwner = msg.sender;
+        authorizedCaller[contractOwner] = true;
     }
 
     /********************************************************************************************/
@@ -49,6 +59,14 @@ contract FlightSuretyData {
         _;
     }
 
+    modifier requireCallerAuthorized() {
+        require(
+            authorizedCaller[msg.sender] == true,
+            "Caller is not authorized"
+        );
+        _;
+    }
+
     /********************************************************************************************/
     /*                                       UTILITY FUNCTIONS                                  */
     /********************************************************************************************/
@@ -67,8 +85,25 @@ contract FlightSuretyData {
      *
      * When operational mode is disabled, all write transactions except for this one will fail
      */
+
     function setOperatingStatus(bool mode) external requireContractOwner {
         operational = mode;
+    }
+
+    function authorizeCaller(address _address)
+        external
+        requireIsOperational
+        requireContractOwner
+    {
+        authorizedCaller[_address] = true;
+    }
+
+    function deauthorizeCaller(address _address)
+        external
+        requireIsOperational
+        requireContractOwner
+    {
+        delete authorizedCaller[_address];
     }
 
     /********************************************************************************************/
