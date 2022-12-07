@@ -14,6 +14,7 @@ contract FlightSuretyData {
 
     mapping(address => bool) private authorizedCaller;
     mapping(bytes32 => Flight) private flights;
+    address[] private consensusOfRegistered;
 
     struct Flight {
         bool isRegistered;
@@ -29,9 +30,10 @@ contract FlightSuretyData {
      * @dev Constructor
      *      The deploying account becomes contractOwner
      */
-    constructor() {
+    constructor(address _address) public {
         contractOwner = msg.sender;
         authorizedCaller[contractOwner] = true;
+        consensusOfRegistered = new address[](0);
     }
 
     /********************************************************************************************/

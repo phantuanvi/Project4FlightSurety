@@ -18,14 +18,14 @@ contract("Flight Surety Tests", async (accounts) => {
   /****************************************************************************************/
   describe('Operational status control', () => {
     it(`(multiparty) has correct initial isOperational() value`, async () => {
-      let status = await flightSuretyData.isOperational();
+      let status = await flightSuretyApp.isOperational();
       assert.equal(status, true, "Incorrect initial operating status value");
     });
 
     it(`(multiparty) can block access to setOperatingStatus() for non-Contract Owner account`, async () => {
       let accessDenied = false;
       try {
-        await flightSuretyData.setOperatingStatus(false, {
+        await flightSuretyApp.setOperatingStatus(false, {
           from: testAddresses.airline2,
         });
       } catch (e) {
