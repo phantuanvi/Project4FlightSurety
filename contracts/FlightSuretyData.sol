@@ -13,8 +13,24 @@ contract FlightSuretyData {
     bool private operational = true; // Blocks all state changes throughout the contract if false
 
     mapping(address => bool) private authorizedCaller;
+
+    mapping(address => Airline) private airlines;
     mapping(bytes32 => Flight) private flights;
-    address[] private consensusOfRegistered;
+
+    struct Airline {
+        AirlineStatus status;
+        address[] votes;
+        uint256 funds;
+    }
+
+    uint256 public registeredAirlineCount = 0;
+    enum AirlineStatus {
+        Nonmember,
+        Nominated,
+        Registered,
+        Funded
+    }
+    AirlineStatus constant defaultStatus = AirlineStatus.Nonmember;
 
     struct Flight {
         bool isRegistered;
@@ -22,6 +38,7 @@ contract FlightSuretyData {
         uint256 updatedTimestamp;
         address airline;
     }
+
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
@@ -30,10 +47,15 @@ contract FlightSuretyData {
      * @dev Constructor
      *      The deploying account becomes contractOwner
      */
-    constructor(address _address) public {
+    constructor(address firstAirlineAddress) public {
         contractOwner = msg.sender;
         authorizedCaller[contractOwner] = true;
-        consensusOfRegistered = new address[](0);
+        airlines[firstAirlineAddress] = Airline(
+            AirlineStatus.Registered,
+            new address[](0), // no votes
+            0 // default no funding
+        );
+        registeredAirlineCount++;
     }
 
     /********************************************************************************************/
@@ -112,12 +134,117 @@ contract FlightSuretyData {
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
 
+    function isStatusRegistered(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (bool)
+    {
+        return airlines[airlineAddress].status == AirlineStatus.Registered;
+    }
+
+    function isStatusRegisteredOrFunded(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (bool)
+    {
+        return
+            airlines[airlineAddress].status == AirlineStatus.Registered ||
+            airlines[airlineAddress].status == AirlineStatus.Funded;
+    }
+
+    function isStatusFunded(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (bool)
+    {
+        return airlines[airlineAddress].status == AirlineStatus.Funded;
+    }
+
+    function statusOfAirline(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        returns (uint256)
+    {
+        return uint256(airlines[airlineAddress].status);
+    }
+
+    function numberVotesOfAirline(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (uint256)
+    {
+        return airlines[airlineAddress].votes.length;
+    }
+
+    function amountFundsOfAirline(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (uint256)
+    {
+        return airlines[airlineAddress].funds;
+    }
+
+    function nominateForAirline(address airlineAddress)
+        external
+        requireIsOperational
+        requireCallerAuthorized
+    {
+        airlines[airlineAddress] = Airline(
+            AirlineStatus.Nominated,
+            new address[](0), // no votes
+            0 // default no funding
+        );
+    }
+
+    function voteForAirline(address airlineAddress, address voterAddress)
+        external
+        requireIsOperational
+        requireCallerAuthorized
+        returns (uint256)
+    {
+        airlines[airlineAddress].votes.push(voterAddress);
+        return airlines[airlineAddress].votes.length;
+    }
+
+    function fundOfAirline(address airlineAddress, uint256 amountFund)
+        external
+        requireIsOperational
+        requireCallerAuthorized
+        returns (uint256)
+    {
+        airlines[airlineAddress].funds = airlines[airlineAddress].funds.add(
+            amountFund
+        );
+        airlines[airlineAddress].status = AirlineStatus.Funded;
+        return airlines[airlineAddress].funds;
+    }
+
     /**
      * @dev Add an airline to the registration queue
      *      Can only be called from FlightSuretyApp contract
      *
      */
-    function registerAirline() external pure {}
+    function registerAirline(address airlineAddress)
+        external
+        requireIsOperational
+        requireCallerAuthorized
+        returns (bool)
+    {
+        airlines[airlineAddress].status = AirlineStatus.Registered;
+        registeredAirlineCount++;
+        return airlines[airlineAddress].status == AirlineStatus.Registered;
+    }
 
     /**
      * @dev Buy insurance for a flight

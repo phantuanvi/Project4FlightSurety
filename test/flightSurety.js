@@ -1,4 +1,14 @@
 var Test = require("../config/testConfig.js");
+const { expect } = require('chai');
+
+const {
+  BN,           // Big Number support
+  constants,    // Common constants, like the zero address and largest integers
+  expectEvent,  // Assertions for emitted events
+  expectRevert, // Assertions for transactions that should fail
+  balance,
+  ether,
+} = require('@openzeppelin/test-helpers');
 
 contract("Flight Surety Tests", async (accounts) => {
   let config;
@@ -11,6 +21,7 @@ contract("Flight Surety Tests", async (accounts) => {
     flightSuretyData = config.flightSuretyData;
     flightSuretyApp = config.flightSuretyApp;
     testAddresses = config.testAddresses;
+    await config.flightSuretyData.authorizeCaller(config.flightSuretyApp.address)
   });
 
   /****************************************************************************************/
@@ -56,7 +67,7 @@ contract("Flight Surety Tests", async (accounts) => {
       await flightSuretyData.setOperatingStatus(false, {from: config.contractOwner});
       let reverted = false;
       try {
-        await flightSuretyData.registerAirline(testAddresses.airline2, {from: airline1});
+        await flightSuretyData.registerAirline(testAddresses.airline2, {from: airline3});
       } catch (e) {
         reverted = true;
       }
@@ -70,23 +81,143 @@ contract("Flight Surety Tests", async (accounts) => {
     });
   });
 
-//   it("(airline) cannot register an Airline using registerAirline() if it is not funded", async () => {
-    // ARRANGE
-//     let newAirline = accounts[2];
+  describe('Business Logic of Airlines', () => {
+    it('First airline is registered when contract is deployed.', async () => {
+      let tran;
+      try {
+        tran = await flightSuretyApp.isStatusRegistered(testAddresses.airline1);
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      assert.equal(tran, true, 'First airline is registered when contract is deployed');
+    });
 
-    // ACT
-//     try {
-//       await config.flightSuretyApp.registerAirline(newAirline, {
-//         from: config.firstAirline,
-//       });
-//     } catch (e) {}
-//     let result = await config.flightSuretyData.isAirline.call(newAirline);
+    it('First airline can registered the second airline.', async () => {
+      let tran;
+      try {
+        tran = await flightSuretyApp.registerAirline(testAddresses.airline2, { from: testAddresses.airline1 });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      expectEvent(tran, 'AirlineRegistered', {
+        airlineAddress: testAddresses.airline2,
+      });
+    });
 
-    // ASSERT
-//     assert.equal(
-//       result,
-//       false,
-//       "Airline should not be able to register another airline if it hasn't provided funding"
-//     );
-//   });
+    it('Second airline can registered the third airline.', async () => {
+      let tran;
+      try {
+        tran = await flightSuretyApp.registerAirline(testAddresses.airline3, { from: testAddresses.airline2 });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      expectEvent(tran, 'AirlineRegistered', {
+        airlineAddress: testAddresses.airline3,
+      });
+    });
+
+    it('Third airline can registered the fourth airline.', async () => {
+      let tran;
+      try {
+        tran = await flightSuretyApp.registerAirline(testAddresses.airline4, { from: testAddresses.airline3 });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      expectEvent(tran, 'AirlineRegistered', {
+        airlineAddress: testAddresses.airline4,
+      });
+    });
+
+    it('Registration of the fifth airline', async () => {
+      let fundingAmount = ether('10');
+      let tran1;
+      try {
+        tran1 = await flightSuretyApp.fundOfAirline(testAddresses.airline1, { from: testAddresses.airline1 , value: fundingAmount });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      expectEvent(tran1, 'AirlineFunded', {
+        airlineAddress: testAddresses.airline1,
+        amount: fundingAmount
+      });
+
+      let tran2;
+      try {
+        tran2 = await flightSuretyApp.fundOfAirline(testAddresses.airline2, { from: testAddresses.airline2 , value: fundingAmount });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      expectEvent(tran2, 'AirlineFunded', {
+        airlineAddress: testAddresses.airline2,
+        amount: fundingAmount
+      });
+
+      let tran3;
+      try {
+        tran3 = await flightSuretyApp.fundOfAirline(testAddresses.airline3, { from: testAddresses.airline3 , value: fundingAmount });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      expectEvent(tran3, 'AirlineFunded', {
+        airlineAddress: testAddresses.airline3,
+        amount: fundingAmount
+      });
+      
+      let tran4;
+      try {
+        tran4 = await flightSuretyApp.nominateForAirline(testAddresses.airline5, { from: testAddresses.airline1 });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      expectEvent(tran4, 'AirlineNominated', {
+        airlineAddress: testAddresses.airline5,
+      });
+      
+      let tran5;
+      try {
+        tran5 = await flightSuretyApp.voteForAirline(testAddresses.airline5, testAddresses.airline2, { from: testAddresses.airline2 });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      
+      expectEvent(tran5, 'AirlineVoted', {
+        airlineAddress: testAddresses.airline5,
+        voterAddress: testAddresses.airline2
+      });
+
+      let tran6;
+      try {
+        tran6 = await flightSuretyApp.voteForAirline(testAddresses.airline5, testAddresses.airline3, { from: testAddresses.airline3 });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      
+      expectEvent(tran6, 'AirlineVoted', {
+        airlineAddress: testAddresses.airline5,
+        voterAddress: testAddresses.airline3
+      });
+
+      let votes = await flightSuretyApp.numberVotesOfAirline.call(testAddresses.airline5);
+      assert.equal(votes, 2, 'Expect two votes for Airline5');
+
+      let tran7;
+      try {
+        tran7 = await flightSuretyApp.isStatusRegistered(testAddresses.airline5);
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      assert.equal(tran7, false, 'Airline5 is not registered');
+
+      let tran8;
+      try {
+        tran8 = await flightSuretyApp.registerAirline(testAddresses.airline5, { from: testAddresses.airline1 });
+      } catch (error) {
+        console.log(`>>>>>>>>>>> error: ${error}`);
+      }
+      expectEvent(tran8, 'AirlineRegistered', {
+        airlineAddress: testAddresses.airline5,
+      });
+    });
+
+  });
 });

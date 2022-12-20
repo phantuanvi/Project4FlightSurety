@@ -54,6 +54,30 @@ contract FlightSuretyApp {
         _;
     }
 
+    modifier requireRegisteredAirlineCaller() {
+        require(
+            flightData.isStatusRegistered(msg.sender) == true,
+            "Only a registered airline can caller"
+        );
+        _;
+    }
+
+    modifier requireFundedAirlineCaller() {
+        require(
+            flightData.isStatusFunded(msg.sender) == true,
+            "Only a funded airline can caller"
+        );
+        _;
+    }
+
+    modifier requireRegisteredAirlineOrFundedAirlineCaller() {
+        require(
+            flightData.isStatusRegisteredOrFunded(msg.sender) == true,
+            "Only a funded airline or a registered airline can caller"
+        );
+        _;
+    }
+
     /********************************************************************************************/
     /*                                       CONSTRUCTOR                                        */
     /********************************************************************************************/
@@ -62,10 +86,25 @@ contract FlightSuretyApp {
      * @dev Contract constructor
      *
      */
-    constructor(address _address) public {
+    constructor(address firstAirlineAddress) public {
         contractOwner = msg.sender;
-        flightData = FlightSuretyData(_address);
+        flightData = FlightSuretyData(firstAirlineAddress);
     }
+
+    /********************************************************************************************/
+    /*                                       EVENTS                                             */
+    /********************************************************************************************/
+
+    event AirlineNominated(address indexed airlineAddress);
+
+    event AirlineRegistered(address indexed airlineAddress);
+
+    event AirlineFunded(address indexed airlineAddress, uint256 amount);
+
+    event AirlineVoted(
+        address indexed airlineAddress,
+        address indexed voterAddress
+    );
 
     /********************************************************************************************/
     /*                                       UTILITY FUNCTIONS                                  */
@@ -75,10 +114,7 @@ contract FlightSuretyApp {
         return flightData.isOperational(); // Modify to call data contract's status
     }
 
-    function setOperatingStatus(bool mode)
-        external
-        requireContractOwner
-    {
+    function setOperatingStatus(bool mode) external requireContractOwner {
         flightData.setOperatingStatus(mode);
     }
 
@@ -86,16 +122,92 @@ contract FlightSuretyApp {
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
 
+    function isStatusRegistered(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        returns (bool)
+    {
+        return flightData.isStatusRegistered(airlineAddress);
+    }
+
+    function isStatusFunded(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        returns (bool)
+    {
+        return flightData.isStatusFunded(airlineAddress);
+    }
+
+    function statusOfAirline(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        returns (uint256)
+    {
+        return flightData.statusOfAirline(airlineAddress);
+    }
+
+    function nominateForAirline(address airlineAddress)
+        external
+        requireIsOperational
+    {
+        flightData.nominateForAirline(airlineAddress);
+        emit AirlineNominated(airlineAddress);
+    }
+
+    function voteForAirline(address airlineAddress, address voterAddress)
+        external
+        requireIsOperational
+        requireFundedAirlineCaller
+    {
+        flightData.voteForAirline(airlineAddress, voterAddress);
+        emit AirlineVoted(airlineAddress, voterAddress);
+    }
+
     /**
      * @dev Add an airline to the registration queue
      *
      */
-    function registerAirline()
+    function registerAirline(address airlineAddress)
         external
-        pure
-        returns (bool success, uint256 votes)
+        requireIsOperational
+        requireRegisteredAirlineOrFundedAirlineCaller
     {
-        return (success, 0);
+        uint256 votes = flightData.voteForAirline(airlineAddress, msg.sender);
+        if (flightData.registeredAirlineCount() >= 5) {
+            if (votes >= flightData.registeredAirlineCount().div(2)) {
+                flightData.registerAirline(airlineAddress);
+                emit AirlineRegistered(airlineAddress);
+            }
+        } else {
+            flightData.registerAirline(airlineAddress);
+            emit AirlineRegistered(airlineAddress);
+        }
+    }
+
+    function numberVotesOfAirline(address airlineAddress)
+        external
+        view
+        requireIsOperational
+        returns (uint256 votes)
+    {
+        return flightData.numberVotesOfAirline(airlineAddress);
+    }
+
+    function fundOfAirline(address airlineAddress)
+        external
+        payable
+        requireIsOperational
+        requireRegisteredAirlineCaller
+    {
+        require(
+            msg.value >= 10 ether,
+            "Airline funding requires at least 10 Ether"
+        );
+        flightData.fundOfAirline(airlineAddress, msg.value);
+        emit AirlineFunded(airlineAddress, msg.value);
     }
 
     /**

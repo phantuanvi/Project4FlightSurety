@@ -16,8 +16,8 @@ var Config = async (accounts) => {
         passenger4 : accounts[9]
     }
 
-    let flightSuretyData = await FlightSuretyData.deployed();
-    let flightSuretyApp = await FlightSuretyApp.deployed();
+    let flightSuretyData = await FlightSuretyData.new(testAddresses.airline1);
+    let flightSuretyApp = await FlightSuretyApp.new(flightSuretyData.address);
 
     console.log(`Contract flightSuretyData address: ${flightSuretyData.address}`);
     console.log(`Contract flightSuretyApp address: ${flightSuretyApp.address}`);
