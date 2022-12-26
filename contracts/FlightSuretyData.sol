@@ -16,11 +16,19 @@ contract FlightSuretyData {
 
     mapping(address => Airline) private airlines;
     mapping(bytes32 => Flight) private flights;
+    mapping(bytes32 => FlightInsurance) private flightInsurance;
+    mapping(address => uint256) private passengerBalance;
 
     struct Airline {
         AirlineStatus status;
         address[] votes;
         uint256 funds;
+    }
+
+    struct FlightInsurance {
+        mapping(address => uint256) purchasedAmount;
+        address[] passengers;
+        bool isPaidOut;
     }
 
     uint256 public registeredAirlineCount = 0;
@@ -34,9 +42,10 @@ contract FlightSuretyData {
 
     struct Flight {
         bool isRegistered;
-        uint8 statusCode;
-        uint256 updatedTimestamp;
         address airline;
+        string flight;
+        uint256 updatedTimestamp;
+        uint8 statusCode;
     }
 
     /********************************************************************************************/
@@ -246,29 +255,54 @@ contract FlightSuretyData {
         return airlines[airlineAddress].status == AirlineStatus.Registered;
     }
 
-    /**
-     * @dev Buy insurance for a flight
-     *
-     */
-    function buy() external payable {}
+    /********************************************************************************************/
+    /*                                       FLIGHT                                             */
+    /********************************************************************************************/
 
-    /**
-     *  @dev Credits payouts to insurees
-     */
-    function creditInsurees() external pure {}
+    function registerFlight(
+        address airline,
+        string flight,
+        uint256 updatedTimestamp,
+        uint8 statusCode
+    ) external requireIsOperational requireCallerAuthorized returns (bool) {
+        bytes32 key = getFlightKey(airline, flight, updatedTimestamp);
+        flights[key] = Flight({
+            isRegistered: true,
+            airline: airline,
+            flight: flight,
+            updatedTimestamp: updatedTimestamp,
+            statusCode: statusCode
+        });
+        return flights[key].isRegistered;
+    }
 
-    /**
-     *  @dev Transfers eligible payout funds to insuree
-     *
-     */
-    function pay() external pure {}
+    function updateStatusOfFlight(uint8 statusCode, bytes32 flightKey)
+        external
+        requireIsOperational
+        requireCallerAuthorized
+    {
+        flights[flightKey].statusCode = statusCode;
+    }
 
-    /**
-     * @dev Initial funding for the insurance. Unless there are too many delayed flights
-     *      resulting in insurance payouts, the contract should be self-sustaining
-     *
-     */
-    function fund() public payable {}
+    function isFlightRegistered(bytes32 flightKey)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (bool)
+    {
+        return flights[flightKey].isRegistered;
+    }
+
+    function getStatusOfFlight(bytes32 flightKey)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (uint8)
+    {
+        return flights[flightKey].statusCode;
+    }
 
     function getFlightKey(
         address airline,
@@ -278,11 +312,110 @@ contract FlightSuretyData {
         return keccak256(abi.encodePacked(airline, flight, timestamp));
     }
 
+    /********************************************************************************************/
+    /*                                       INSURANCE                                          */
+    /********************************************************************************************/
+
+    /**
+     * @dev Buy insurance for a flight
+     *
+     */
+    function buyInsurance(
+        address passengerAddress,
+        uint256 insuranceAmount,
+        bytes32 flightKey
+    ) external requireIsOperational requireCallerAuthorized {
+        flightInsurance[flightKey].purchasedAmount[
+            passengerAddress
+        ] = insuranceAmount;
+        flightInsurance[flightKey].passengers.push(passengerAddress);
+    }
+
+    function isPassengerInsured(address passengerAddress, bytes32 flightKey)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (bool)
+    {
+        return flightInsurance[flightKey].purchasedAmount[passengerAddress] > 0;
+    }
+
+    function isPaidOut(bytes32 flightKey)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (bool)
+    {
+        return flightInsurance[flightKey].isPaidOut;
+    }
+
+    function currentPassengerBalance(address passengerAddress)
+        external
+        view
+        requireIsOperational
+        requireCallerAuthorized
+        returns (uint256)
+    {
+        return passengerBalance[passengerAddress];
+    }
+
+    /**
+     *  @dev Credits payouts to insurees
+     */
+    function creditInsurees(bytes32 flightKey, address airlineAddress)
+        external
+        requireIsOperational
+        requireCallerAuthorized
+    {
+        require(
+            !flightInsurance[flightKey].isPaidOut,
+            "Flight insurance already paid out"
+        );
+        for (
+            uint256 i = 0;
+            i < flightInsurance[flightKey].passengers.length;
+            i++
+        ) {
+            address passengerAddress = flightInsurance[flightKey].passengers[i];
+            uint256 purchasedAmount = flightInsurance[flightKey]
+                .purchasedAmount[passengerAddress];
+            uint256 payoutAmount = purchasedAmount.mul(3).div(2);
+            passengerBalance[passengerAddress] = passengerBalance[
+                passengerAddress
+            ].add(payoutAmount);
+            airlines[airlineAddress].funds.sub(payoutAmount);
+        }
+        flightInsurance[flightKey].isPaidOut = true;
+    }
+
+    /**
+     *  @dev Transfers eligible payout funds to insuree
+     *
+     */
+    function payPassenger(address insured, uint256 amount)
+        external
+        requireIsOperational
+        requireCallerAuthorized
+    {
+        require(amount<=passengerBalance[insured], "Withdrawal exceeds account balance");
+        passengerBalance[insured] = passengerBalance[insured].sub(amount);
+        insured.transfer(amount);
+    }
+
+    /**
+     * @dev Initial funding for the insurance. Unless there are too many delayed flights
+     *      resulting in insurance payouts, the contract should be self-sustaining
+     *
+     */
+    // function fund() public payable {}
+
     /**
      * @dev Fallback function for funding smart contract.
      *
      */
-    function() external payable {
-        fund();
-    }
+    // function() external payable {
+    //     fund();
+    // }
 }

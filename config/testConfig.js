@@ -16,18 +16,25 @@ var Config = async (accounts) => {
         passenger4 : accounts[9]
     }
 
+    oracles = accounts.slice(10,30);
+
     let flightSuretyData = await FlightSuretyData.new(testAddresses.airline1);
     let flightSuretyApp = await FlightSuretyApp.new(flightSuretyData.address);
 
     console.log(`Contract flightSuretyData address: ${flightSuretyData.address}`);
     console.log(`Contract flightSuretyApp address: ${flightSuretyApp.address}`);
     console.log(testAddresses);
-
+    console.log("-------------------");
+    oracles.forEach(async (oracleAccount, index) => {
+        console.log(`oracles address ${index+1}: ${oracleAccount}`);
+    })
+    
     return {
         contractOwner: testAddresses.contractOwner,
         testAddresses: testAddresses,
         flightSuretyData: flightSuretyData,
-        flightSuretyApp: flightSuretyApp
+        flightSuretyApp: flightSuretyApp,
+        oracles: oracles
     }
 }
 
