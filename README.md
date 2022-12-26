@@ -21,24 +21,18 @@ To run truffle tests:
 To use the dapp:
 
 `truffle migrate`
-`npm run dapp`
+
+Go to new-dapp folder
+`npm run serve`
 
 To view dapp:
 
-`http://localhost:8000`
+`http://localhost:4000`
 
 ## Develop Server
 
 `npm run server`
 `truffle test ./test/oracles.js`
-
-## Deploy
-
-To build dapp for prod:
-`npm run dapp:prod`
-
-Deploy the contents of the ./dapp folder
-
 
 ## Resources
 
